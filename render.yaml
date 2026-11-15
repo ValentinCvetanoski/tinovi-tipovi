@@ -1,0 +1,16 @@
+# Render Blueprint: New > Blueprint, pick this repo, and Render sets up the API.
+services:
+  - type: web
+    name: tinovi-tipovi-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      # Your Vercel URL, e.g. https://tinovi-tipovi.vercel.app (leave empty to allow all)
+      - key: ALLOWED_ORIGINS
+        sync: false

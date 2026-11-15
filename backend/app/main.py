@@ -185,8 +185,7 @@ def history(
     return JSONResponse(
         {
             "status": "ok",
-            "from": perf.get("from"),
-            "to": perf.get("to"),
+            "since": config.HISTORY_START.isoformat(),
             "computed_at": perf.get("computed_at"),
             "summary": summary,
             "total": len(items),

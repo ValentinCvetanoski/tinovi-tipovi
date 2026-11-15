@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 import pytest
@@ -24,6 +24,8 @@ def files(leagues):
 def offline(monkeypatch, files, tmp_path):
     monkeypatch.setattr(config, "LEAGUES", {"E0": ("Anglija", "Premier League"), "D1": ("Germanija", "Bundesliga")})
     monkeypatch.setattr(data, "fetch_text", lambda path, client: files.get(path))
+    # tests replay the whole recent history unless they say otherwise
+    monkeypatch.setattr(config, "HISTORY_START", datetime.now(timezone.utc) - timedelta(days=60))
 
 
 def test_devig_removes_margin():
@@ -126,9 +128,25 @@ def test_past_tips_are_scored_correctly(offline):
     assert [t["kickoff"] for t in past] == sorted((t["kickoff"] for t in past), reverse=True)
     for t in past:
         assert t["won"] == _expected_win(t["pick"], t["score"])
-    # the per-category counts agree with the performance summary
-    for cat, stats in perf["tips"].items():
-        assert stats["tips"] == sum(t["category"] == cat for t in past)
+
+
+def test_past_tips_start_at_history_start(offline, monkeypatch):
+    history, last_season, _ = data.load_all()
+    start = datetime.now(timezone.utc) - timedelta(days=20)
+    monkeypatch.setattr(config, "HISTORY_START", start)
+    _, past = engine.backtest(history, last_season)
+    assert past and all(datetime.fromisoformat(t["kickoff"]) >= start for t in past)
+
+    # launch day in the future (nothing finished yet): empty list, stats still work
+    monkeypatch.setattr(config, "HISTORY_START", datetime.now(timezone.utc) + timedelta(days=1))
+    perf, past = engine.backtest(history, last_season)
+    assert past == [] and perf["matches"] > 50
+
+    # far in the past: tips keep accumulating beyond the 70-day stats window
+    monkeypatch.setattr(config, "HISTORY_START", datetime.now(timezone.utc) - timedelta(days=150))
+    _, long_past = engine.backtest(history, last_season)
+    oldest = datetime.fromisoformat(long_past[-1]["kickoff"])
+    assert oldest < datetime.now(timezone.utc) - timedelta(days=config.BACKTEST_DAYS + 7)
 
 
 def test_past_tips_never_use_future_data(offline, monkeypatch):
@@ -186,7 +204,8 @@ def test_history_endpoint(offline):
     r = client.get("/api/history", params={"category": "safe", "limit": 5}).json()
     assert r["status"] == "ok" and len(r["items"]) == 5
     assert all(t["category"] == "safe" for t in r["items"])
-    assert r["summary"]["tips"] == perf["tips"]["safe"]["tips"]
+    assert r["summary"]["tips"] == sum(t["category"] == "safe" for t in past)
+    assert r["since"] == config.HISTORY_START.isoformat()
 
     page2 = client.get("/api/history", params={"category": "safe", "limit": 5, "offset": 5}).json()
     assert {t["match_id"] for t in page2["items"]}.isdisjoint({t["match_id"] for t in r["items"]})

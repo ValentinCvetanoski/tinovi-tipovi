@@ -100,13 +100,17 @@ export default function History() {
   }
 
   const s = page.summary;
-  const days = page.from && page.to ? Math.round((new Date(page.to) - new Date(page.from)) / 86400000) : null;
+  const sinceDate = page.since ? new Date(page.since) : null;
+  const since = sinceDate
+    ? `${sinceDate.getUTCDate()}.${sinceDate.getUTCMonth() + 1}.${sinceDate.getUTCFullYear()}`
+    : "pochetokot";
+  const filtered = category !== "all" || result !== "all" || league !== "";
 
   return (
     <section className="history" aria-label="Minati tipovi">
       <p className="intro">
-        Tipovite od poslednite {days ?? "nekolku"} dena, presmetani nedela po nedela. Za sekoj natprevar modelot gi
-        gledashe samo rezultatite i koeficientite od pred pochetokot.
+        Site tipovi od {since} navamu, so konechniot rezultat. Sekoj tip se presmetuva samo so podatocite od pred
+        pochetokot na natprevarot.
       </p>
 
       <div className="history__filters">
@@ -140,7 +144,11 @@ export default function History() {
       )}
 
       {page.items.length === 0 ? (
-        <p className="empty">Nema tipovi za ovie filtri.</p>
+        <p className="empty">
+          {filtered
+            ? "Nema tipovi za ovie filtri."
+            : `Seushte nema zavrsheni natprevari od ${since} navamu. Tipovite kje se pojavat tuka koga kje zavrshat natprevarite i kje stignat rezultatite, obichno za eden do dva dena.`}
+        </p>
       ) : (
         <>
           {groupByDay(page.items).map((g) => (

@@ -1,7 +1,7 @@
 """All settings live here. Everything can be overridden with environment variables."""
 
 import os
-from datetime import date
+from datetime import date, datetime, timezone
 
 # Free data from football-data.co.uk: no account and no API key needed.
 BASE_URL = os.getenv("DATA_BASE_URL", "https://www.football-data.co.uk").rstrip("/")
@@ -49,6 +49,12 @@ MAX_GOALS = 10
 # --- backtest ---
 # Matches in the last N days are held out to measure the model honestly.
 BACKTEST_DAYS = int(os.getenv("BACKTEST_DAYS", "70"))
+
+# "Minati tipovi" only lists matches from this date on (the day the app went live).
+# Format YYYY-MM-DD. Tips keep accumulating from here; they do not expire.
+HISTORY_START = datetime.combine(
+    date.fromisoformat(os.getenv("HISTORY_START", "2026-11-15")), datetime.min.time(), tzinfo=timezone.utc
+)
 
 # --- tips ---
 SAFE_MIN_PROB = float(os.getenv("SAFE_MIN_PROB", "0.62"))

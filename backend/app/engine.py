@@ -131,13 +131,15 @@ def backtest(history: dict[str, list[Match]], last_season: dict[str, set[str]]) 
     Returns (performance summary, past tips with their results).
     """
     started = time.time()
-    records = []  # (league, match, model_probs, market_probs)
+    records = []  # (league, match, model_probs, market_probs) in the last BACKTEST_DAYS
+    since_start = []  # same, for matches from HISTORY_START on (the past-tips list)
     for lg, matches in history.items():
         if not matches:
             continue
         end = matches[-1].kickoff
-        start = end - timedelta(days=config.BACKTEST_DAYS)
-        cut = start
+        window_start = end - timedelta(days=config.BACKTEST_DAYS)
+        # Replay far enough back to cover both the stats window and the past-tips list.
+        cut = min(window_start, config.HISTORY_START) if config.HISTORY_START <= end else window_start
         while cut <= end:
             nxt = cut + timedelta(days=REFIT_EVERY_DAYS)
             ratings = fit(matches, cut, last_season.get(lg, set()))
@@ -147,7 +149,10 @@ def backtest(history: dict[str, list[Match]], last_season: dict[str, set[str]]) 
                         mp = ratings.predict(m.home, m.away)
                         mk = market_probs(m)
                         if mp and mk and "home" in mk:
-                            records.append((lg, m, mp, mk))
+                            if m.kickoff >= window_start:
+                                records.append((lg, m, mp, mk))
+                            if m.kickoff >= config.HISTORY_START:
+                                since_start.append((lg, m, mp, mk))
             cut = nxt
 
     computed_at = datetime.now(timezone.utc).isoformat()
@@ -198,10 +203,7 @@ def backtest(history: dict[str, list[Match]], last_season: dict[str, set[str]]) 
     # How would the tip rules have done?
     rows = [(m, candidates(m, blend(mp, mk, best_w))) for _, m, mp, mk in records]
     tip_stats = {}
-    past_tips = []
     for cat, bets in select_tips(rows).items():
-        for m, c in bets:
-            past_tips.append(past_tip_json(m, c, cat))
         won = [_won(m, c["key"]) for m, c in bets]
         best = [(c["odds"], _won(m, c["key"])) for m, c in bets if c["odds"]]
         avg = [(c["avg_odds"], _won(m, c["key"])) for m, c in bets if c["avg_odds"]]
@@ -225,7 +227,14 @@ def backtest(history: dict[str, list[Match]], last_season: dict[str, set[str]]) 
         "overall": overall,
         "leagues": per_league,
         "tips": tip_stats,
-    }, sorted(past_tips, key=lambda t: t["kickoff"], reverse=True)
+    }, past_tips(since_start, best_w)
+
+
+def past_tips(records: list, w: float) -> list[dict]:
+    """The tips the app would have shown for each replayed match, with results."""
+    rows = [(m, candidates(m, blend(mp, mk, w))) for _, m, mp, mk in records]
+    out = [past_tip_json(m, c, cat) for cat, bets in select_tips(rows).items() for m, c in bets]
+    return sorted(out, key=lambda t: t["kickoff"], reverse=True)
 
 
 def past_tip_json(m: Match, c: dict, category: str) -> dict:

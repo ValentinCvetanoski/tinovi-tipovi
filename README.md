@@ -16,7 +16,7 @@ Football tips from a statistical model, checked against the betting market. No A
    - *Vrednost*: the best available price is at least 3% higher than the fair price.
    - *Golovi*: 3+ or 0-2 goals with at least a 58% chance.
 
-   The *Minati tipovi* tab lists every tip from those replayed weeks with the final score and whether it won, plus the record and profit for any filter. The *Kolku pogoduva* tab shows how accurate the probabilities were.
+   The *Minati tipovi* tab lists every tip since the launch date (`HISTORY_START`) with the final score and whether it won, plus the record and profit for any filter. The list keeps growing; it does not expire. The *Kolku pogoduva* tab shows how accurate the probabilities were.
 
    Past tips are rebuilt from the data instead of being stored, because Render's free plan has no permanent disk. They are the tips the app would have given at the time: the model is refit every week on matches played before, and uses the odds published before kick-off.
 
@@ -76,6 +76,7 @@ All optional, set as environment variables on Render:
 | `GOALS_MIN_PROB` | `0.58` | Minimum chance for *Golovi* |
 | `TIPS_LIMIT` | `12` | Tips shown per tab |
 | `BACKTEST_EVERY_HOURS` | `24` | How often the backtest is rerun |
+| `HISTORY_START` | `2026-11-15` | First day shown in *Minati tipovi* (YYYY-MM-DD) |
 
 ## Responsible gambling
 

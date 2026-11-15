@@ -15,19 +15,19 @@ import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
 from . import config
 from .data import CACHE_DIR, load_all
-from .engine import backtest, build_predictions
+from .engine import backtest, build_predictions, summarize
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("tipovi")
 
-_state: dict = {"snapshot": None, "perf": None, "error": None, "building": False}
+_state: dict = {"snapshot": None, "perf": None, "history": None, "error": None, "building": False}
 PERF_FILE = os.path.join(CACHE_DIR, "performance.json")
 BACKTEST_EVERY_HOURS = float(os.getenv("BACKTEST_EVERY_HOURS", "24"))
 _lock = threading.Lock()
@@ -51,19 +51,20 @@ app.add_middleware(
 RETRY_AFTER_FAILURE_SECONDS = 300
 
 
-def _load_perf() -> dict | None:
+def _load_perf() -> tuple[dict | None, list[dict] | None]:
     try:
         with open(PERF_FILE) as f:
-            return json.load(f)
-    except (OSError, ValueError):
-        return None
+            saved = json.load(f)
+        return saved["perf"], saved["history"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None, None
 
 
-def _save_perf(perf: dict) -> None:
+def _save_perf(perf: dict, history: list[dict]) -> None:
     try:
         os.makedirs(CACHE_DIR, exist_ok=True)
         with open(PERF_FILE, "w") as f:
-            json.dump(perf, f)
+            json.dump({"perf": perf, "history": history}, f)
     except OSError:
         pass
 
@@ -89,16 +90,21 @@ def _refresh() -> bool:
         _state["building"] = True
     try:
         history, last_season, fixtures = load_all()
-        perf = _state["perf"] or _load_perf()
+        perf, past = (_state["perf"], _state["history"]) if _state["perf"] else _load_perf()
         _state.update(
             snapshot=build_predictions(history, last_season, fixtures, perf),
             perf=perf,
+            history=past,
             error=None,
         )
         if _perf_age_hours(perf) >= BACKTEST_EVERY_HOURS:
-            perf = backtest(history, last_season)
-            _save_perf(perf)
-            _state.update(perf=perf, snapshot=build_predictions(history, last_season, fixtures, perf))
+            perf, past = backtest(history, last_season)
+            _save_perf(perf, past)
+            _state.update(
+                perf=perf,
+                history=past,
+                snapshot=build_predictions(history, last_season, fixtures, perf),
+            )
         return True
     except Exception as exc:  # keep serving the previous snapshot
         log.exception("Snapshot build failed")
@@ -117,7 +123,7 @@ def _loop() -> None:
 
 @app.get("/")
 def root():
-    return {"name": "Tinovi Tipovi API", "endpoints": ["/api/snapshot", "/api/health"]}
+    return {"name": "Tinovi Tipovi API", "endpoints": ["/api/snapshot", "/api/history", "/api/health"]}
 
 
 @app.get("/api/health")
@@ -148,3 +154,44 @@ def snapshot():
             headers={"Retry-After": "10"},
         )
     return JSONResponse(snap, headers={"Cache-Control": "public, max-age=300"})
+
+
+@app.get("/api/history")
+def history(
+    category: str = Query("all", pattern="^(all|safe|value|goals)$"),
+    league: str | None = None,
+    result: str = Query("all", pattern="^(all|won|lost)$"),
+    limit: int = Query(40, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """Past tips with their results, newest first, plus the record for the filter."""
+    past = _state["history"]
+    if past is None:
+        # The replay runs after the tips are published; it takes a minute or two.
+        return {"status": "pending"}
+
+    items = [t for t in past if category == "all" or t["category"] == category]
+    if league:
+        items = [t for t in items if t["league"] == league]
+    summary = summarize(items)
+    if result != "all":
+        items = [t for t in items if t["won"] == (result == "won")]
+
+    perf = _state["perf"] or {}
+    leagues = sorted(
+        {(t["league"], t["league_name"], t["country"]) for t in past},
+        key=lambda x: (x[2], x[1]),
+    )
+    return JSONResponse(
+        {
+            "status": "ok",
+            "from": perf.get("from"),
+            "to": perf.get("to"),
+            "computed_at": perf.get("computed_at"),
+            "summary": summary,
+            "total": len(items),
+            "items": items[offset : offset + limit],
+            "leagues": [{"code": c, "name": n, "country": k} for c, n, k in leagues],
+        },
+        headers={"Cache-Control": "public, max-age=300"},
+    )

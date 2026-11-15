@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSnapshot } from "./api";
 import { dateTime } from "./format";
+import History from "./components/History";
 import MatchList from "./components/MatchList";
 import Performance from "./components/Performance";
 import Ticket from "./components/Ticket";
@@ -11,6 +12,7 @@ const TABS = [
   { id: "value", label: "Vrednost" },
   { id: "goals", label: "Golovi" },
   { id: "all", label: "Site natprevari" },
+  { id: "history", label: "Minati tipovi" },
   { id: "perf", label: "Kolku pogoduva" },
 ];
 
@@ -113,6 +115,7 @@ export default function App() {
             {tab === "all" && (
               <MatchList matches={data.matches} leagues={data.leagues} ticket={ticket} onToggle={toggle} />
             )}
+            {tab === "history" && <History />}
             {tab === "perf" && <Performance perf={data.performance} onReload={retry} />}
           </main>
 

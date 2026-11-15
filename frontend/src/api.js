@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const API_URL = (import.meta.env.VITE_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
+export const API_URL = (import.meta.env.VITE_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
 /**
  * Loads the snapshot. A free Render server sleeps when idle, so the first
@@ -46,4 +46,13 @@ export function useSnapshot() {
   }, [load]);
 
   return { ...state, retry };
+}
+
+/** One page of past tips. Resolves to {status: "pending"} while the replay is still running. */
+export async function fetchHistory({ category, league, result, offset = 0, limit = 40 }) {
+  const params = new URLSearchParams({ category, result, offset, limit });
+  if (league) params.set("league", league);
+  const res = await fetch(`${API_URL}/api/history?${params}`);
+  if (!res.ok) throw new Error(`Serverot vrati greshka ${res.status}.`);
+  return res.json();
 }

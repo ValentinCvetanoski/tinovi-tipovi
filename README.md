@@ -16,7 +16,9 @@ Football tips from a statistical model, checked against the betting market. No A
    - *Vrednost*: the best available price is at least 3% higher than the fair price.
    - *Golovi*: 3+ or 0-2 goals with at least a 58% chance.
 
-   The *Kolku pogoduva* tab shows how accurate the probabilities and each tip type were on those replayed matches.
+   The *Minati tipovi* tab lists every tip from those replayed weeks with the final score and whether it won, plus the record and profit for any filter. The *Kolku pogoduva* tab shows how accurate the probabilities were.
+
+   Past tips are rebuilt from the data instead of being stored, because Render's free plan has no permanent disk. They are the tips the app would have given at the time: the model is refit every week on matches played before, and uses the odds published before kick-off.
 
 Data refreshes every 6 hours in the background, so pages load instantly from memory. After a restart, tips go live as soon as the data is downloaded; the backtest runs afterwards (at most once a day) and then fine-tunes the blend.
 
@@ -35,6 +37,8 @@ npm install
 cp .env.example .env                     # points to http://localhost:8000
 npm run dev                              # http://localhost:5173
 ```
+
+API: `/api/snapshot` (everything for upcoming matches), `/api/history?category=all|safe|value|goals&league=E0&result=all|won|lost&limit=40&offset=0` (past tips), `/api/health`.
 
 Tests: `cd backend && pip install pytest && python -m pytest`. They use generated data, so no internet is needed.
 

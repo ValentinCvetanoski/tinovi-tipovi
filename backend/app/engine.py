@@ -30,7 +30,7 @@ ODDS_KEY = {"home": 0, "draw": 1, "away": 2}
 OU_KEY = {"over25": 0, "under25": 1}
 BLEND_GRID = [i / 10 for i in range(11)]
 DEFAULT_BLEND = 0.35
-REFIT_EVERY_DAYS = 21
+REFIT_EVERY_DAYS = 7  # weekly, like a real matchday-by-matchday tipster
 
 
 # ---------- helpers ----------
@@ -122,11 +122,13 @@ def _logloss(p: float) -> float:
 # ---------- backtest ----------
 
 
-def backtest(history: dict[str, list[Match]], last_season: dict[str, set[str]]) -> dict:
+def backtest(history: dict[str, list[Match]], last_season: dict[str, set[str]]) -> tuple[dict, list[dict]]:
     """
-    Walk forward over the last BACKTEST_DAYS: refit the model every few weeks
-    using only matches played before, then score its predictions against what
+    Walk forward over the last BACKTEST_DAYS: refit the model every week using
+    only matches played before, then score its predictions against what
     actually happened. This is how we know whether the model helps at all.
+
+    Returns (performance summary, past tips with their results).
     """
     started = time.time()
     records = []  # (league, match, model_probs, market_probs)
@@ -150,7 +152,7 @@ def backtest(history: dict[str, list[Match]], last_season: dict[str, set[str]]) 
 
     computed_at = datetime.now(timezone.utc).isoformat()
     if not records:
-        return {"matches": 0, "blend_weight": DEFAULT_BLEND, "computed_at": computed_at}
+        return {"matches": 0, "blend_weight": DEFAULT_BLEND, "computed_at": computed_at}, []
 
     def outcome_p(probs, m):
         return probs["home"] if m.hg > m.ag else probs["draw"] if m.hg == m.ag else probs["away"]
@@ -196,7 +198,10 @@ def backtest(history: dict[str, list[Match]], last_season: dict[str, set[str]]) 
     # How would the tip rules have done?
     rows = [(m, candidates(m, blend(mp, mk, best_w))) for _, m, mp, mk in records]
     tip_stats = {}
+    past_tips = []
     for cat, bets in select_tips(rows).items():
+        for m, c in bets:
+            past_tips.append(past_tip_json(m, c, cat))
         won = [_won(m, c["key"]) for m, c in bets]
         best = [(c["odds"], _won(m, c["key"])) for m, c in bets if c["odds"]]
         avg = [(c["avg_odds"], _won(m, c["key"])) for m, c in bets if c["avg_odds"]]
@@ -220,6 +225,30 @@ def backtest(history: dict[str, list[Match]], last_season: dict[str, set[str]]) 
         "overall": overall,
         "leagues": per_league,
         "tips": tip_stats,
+    }, sorted(past_tips, key=lambda t: t["kickoff"], reverse=True)
+
+
+def past_tip_json(m: Match, c: dict, category: str) -> dict:
+    return {
+        **_tip_json(m, c),
+        "category": category,
+        "avg_odds": _r(c["avg_odds"], 2),
+        "score": f"{m.hg}-{m.ag}",
+        "won": _won(m, c["key"]),
+    }
+
+
+def summarize(tips: list[dict]) -> dict:
+    """Record and profit for a list of past tips (1 unit staked per tip)."""
+    won = sum(t["won"] for t in tips)
+    best = [t for t in tips if t["odds"]]
+    avg = [t for t in tips if t["avg_odds"]]
+    return {
+        "tips": len(tips),
+        "won": won,
+        "hit_rate": _r(won / len(tips)) if tips else None,
+        "profit_best_odds": _r(sum((t["odds"] if t["won"] else 0) - 1 for t in best), 2),
+        "profit_avg_odds": _r(sum((t["avg_odds"] if t["won"] else 0) - 1 for t in avg), 2),
     }
 
 
@@ -333,5 +362,5 @@ def build_predictions(
 def build_snapshot() -> dict:
     """Everything in one go (used by tests and local scripts)."""
     history, last_season, fixtures = load_all()
-    perf = backtest(history, last_season)
+    perf, _ = backtest(history, last_season)
     return build_predictions(history, last_season, fixtures, perf)

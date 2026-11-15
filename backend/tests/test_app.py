@@ -107,3 +107,96 @@ def test_predictions_work_before_backtest(offline):
     snap = engine.build_predictions(history, last_season, fixtures, perf=None)
     assert snap["matches"] and snap["performance"] is None
     assert snap["blend_weight"] == engine.DEFAULT_BLEND
+
+
+def _expected_win(pick, score):
+    hg, ag = map(int, score.split("-"))
+    return {
+        "1": hg > ag, "X": hg == ag, "2": hg < ag,
+        "3+": hg + ag >= 3, "0-2": hg + ag <= 2,
+        "GG": hg > 0 and ag > 0, "NG": hg == 0 or ag == 0,
+    }[pick]
+
+
+def test_past_tips_are_scored_correctly(offline):
+    history, last_season, _ = data.load_all()
+    perf, past = engine.backtest(history, last_season)
+    assert past, "expected past tips"
+    assert {t["category"] for t in past} <= {"safe", "value", "goals"}
+    assert [t["kickoff"] for t in past] == sorted((t["kickoff"] for t in past), reverse=True)
+    for t in past:
+        assert t["won"] == _expected_win(t["pick"], t["score"])
+    # the per-category counts agree with the performance summary
+    for cat, stats in perf["tips"].items():
+        assert stats["tips"] == sum(t["category"] == cat for t in past)
+
+
+def test_past_tips_never_use_future_data(offline, monkeypatch):
+    """Every replayed prediction must come from a fit made before kick-off."""
+    real_fit = engine.fit
+    fits = []
+
+    def spy(matches, as_of, last):
+        r = real_fit(matches, as_of, last)
+        if r is not None:
+            r._as_of = as_of
+            real_predict = r.predict
+
+            def predict(home, away, _r=r, _p=real_predict):
+                fits.append((_r._as_of, home, away))
+                return _p(home, away)
+
+            r.predict = predict
+        return r
+
+    monkeypatch.setattr(engine, "fit", spy)
+    history, last_season, _ = data.load_all()
+    _, past = engine.backtest(history, last_season)
+    kickoff = {(m.home, m.away): m.kickoff for ms in history.values() for m in ms}
+    assert fits
+    for as_of, home, away in fits:
+        assert as_of <= kickoff[(home, away)]
+
+
+def test_summarize():
+    tips = [
+        {"won": True, "odds": 2.0, "avg_odds": 1.9},
+        {"won": False, "odds": 1.5, "avg_odds": 1.45},
+        {"won": True, "odds": 1.8, "avg_odds": None},
+    ]
+    s = engine.summarize(tips)
+    assert s["tips"] == 3 and s["won"] == 2
+    assert s["profit_best_odds"] == pytest.approx((2.0 - 1) + (-1) + (1.8 - 1))
+    assert s["profit_avg_odds"] == pytest.approx((1.9 - 1) + (-1))
+
+
+def test_history_endpoint(offline):
+    from fastapi.testclient import TestClient
+
+    from app import main
+
+    main._state.update(history=None, perf=None)
+    client = TestClient(main.app)  # no "with": the background refresher stays off
+    assert client.get("/api/history").json() == {"status": "pending"}
+
+    history, last_season, _ = data.load_all()
+    perf, past = engine.backtest(history, last_season)
+    main._state.update(perf=perf, history=past)
+
+    r = client.get("/api/history", params={"category": "safe", "limit": 5}).json()
+    assert r["status"] == "ok" and len(r["items"]) == 5
+    assert all(t["category"] == "safe" for t in r["items"])
+    assert r["summary"]["tips"] == perf["tips"]["safe"]["tips"]
+
+    page2 = client.get("/api/history", params={"category": "safe", "limit": 5, "offset": 5}).json()
+    assert {t["match_id"] for t in page2["items"]}.isdisjoint({t["match_id"] for t in r["items"]})
+
+    lost = client.get("/api/history", params={"result": "lost", "limit": 200}).json()
+    assert lost["items"] and not any(t["won"] for t in lost["items"])
+
+    lg = r["leagues"][0]["code"]
+    only = client.get("/api/history", params={"league": lg, "limit": 200}).json()
+    assert all(t["league"] == lg for t in only["items"])
+
+    assert client.get("/api/history", params={"category": "bogus"}).status_code == 422
+    main._state.update(history=None, perf=None)

@@ -672,6 +672,138 @@ h2 {
   font-weight: 700;
 }
 
+/* ---------- past tips ---------- */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.history__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.25rem 1.5rem;
+}
+
+.select select {
+  padding: 0.25rem 2rem 0.25rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--deep)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238c9aae'/%3E%3C/svg%3E")
+    no-repeat right 0.75rem center;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.875rem;
+  appearance: none;
+}
+
+.record {
+  margin: 1.25rem 0 0.5rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.record__main {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(1.6rem, 4vw, 2.25rem);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.record__pct {
+  color: var(--slate);
+  font-weight: 600;
+}
+
+.record__money {
+  margin: 0.375rem 0 0;
+  color: var(--slate);
+}
+
+.day__title {
+  margin: 1.5rem 0 0;
+  padding-bottom: 0.375rem;
+  font-family: var(--display);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--slate);
+  border-bottom: 1px solid var(--line);
+}
+
+.row--past {
+  grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+}
+
+.score {
+  display: inline-block;
+  margin: 0 0.4rem;
+  padding: 0 0.4rem;
+  border-radius: 3px;
+  background: var(--deep);
+  color: var(--text);
+}
+
+.row__past {
+  display: grid;
+  grid-template-columns: 13rem 3.25rem 5rem;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.past-pick {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+  line-height: 1.2;
+}
+
+.past-pick b {
+  font-family: var(--display);
+  font-size: 1.2rem;
+}
+
+.past-odds {
+  font-family: var(--display);
+  font-size: 1.2rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.verdict {
+  padding: 0.2rem 0;
+  border-radius: 4px;
+  font-family: var(--display);
+  font-size: 1rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.verdict--won {
+  background: var(--win);
+  color: var(--ink);
+}
+
+.verdict--lost {
+  border: 1px solid var(--loss);
+  color: var(--loss);
+}
+
+.is-lost .past-odds {
+  color: var(--slate);
+}
+
+.more {
+  margin-top: 1.25rem;
+}
+
 /* ---------- small screens ---------- */
 
 @media (max-width: 960px) {
@@ -763,6 +895,22 @@ h2 {
   .details {
     grid-column: 1 / -1;
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .row--past {
+    grid-template-columns: 3rem minmax(0, 1fr);
+  }
+
+  .row__past {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) 3.25rem 5rem;
+  }
+
+  .past-pick {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 0.5rem;
+    text-align: left;
   }
 
   .facts div {

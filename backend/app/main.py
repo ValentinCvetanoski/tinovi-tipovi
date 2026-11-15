@@ -43,25 +43,32 @@ app.add_middleware(
 )
 
 
-def _refresh() -> None:
+RETRY_AFTER_FAILURE_SECONDS = 300
+
+
+def _refresh() -> bool:
+    """Rebuild the snapshot. Returns True on success."""
     with _lock:
         if _state["building"]:
-            return
+            return False
         _state["building"] = True
     try:
         snapshot = build_snapshot()
         _state.update(snapshot=snapshot, error=None)
+        return True
     except Exception as exc:  # keep serving the previous snapshot
         log.exception("Snapshot build failed")
-        _state["error"] = str(exc)
+        _state["error"] = f"{type(exc).__name__}: {exc}"
+        return False
     finally:
         _state["building"] = False
 
 
 def _loop() -> None:
     while True:
-        _refresh()
-        time.sleep(config.REFRESH_HOURS * 3600)
+        ok = _refresh()
+        # After a failure, try again in a few minutes instead of waiting hours.
+        time.sleep(config.REFRESH_HOURS * 3600 if ok else RETRY_AFTER_FAILURE_SECONDS)
 
 
 @app.get("/")
@@ -77,6 +84,7 @@ def health():
         "ready": snap is not None,
         "building": _state["building"],
         "updated_at": snap["updated_at"] if snap else None,
+        "last_error": _state["error"],
     }
 
 
@@ -86,7 +94,11 @@ def snapshot():
     if snap is None:
         # First build after a cold start takes a little while.
         return JSONResponse(
-            {"status": "warming_up", "message": "Serverot se zagreva, probaj za momentot."},
+            {
+                "status": "warming_up" if _state["building"] or not _state["error"] else "failed",
+                "message": "Serverot se zagreva, probaj za momentot.",
+                "error": _state["error"],
+            },
             status_code=503,
             headers={"Retry-After": "10"},
         )

@@ -128,6 +128,7 @@ def backtest(history: dict[str, list[Match]], last_season: dict[str, set[str]]) 
     using only matches played before, then score its predictions against what
     actually happened. This is how we know whether the model helps at all.
     """
+    started = time.time()
     records = []  # (league, match, model_probs, market_probs)
     for lg, matches in history.items():
         if not matches:
@@ -147,8 +148,9 @@ def backtest(history: dict[str, list[Match]], last_season: dict[str, set[str]]) 
                             records.append((lg, m, mp, mk))
             cut = nxt
 
+    computed_at = datetime.now(timezone.utc).isoformat()
     if not records:
-        return {"matches": 0, "blend_weight": DEFAULT_BLEND}
+        return {"matches": 0, "blend_weight": DEFAULT_BLEND, "computed_at": computed_at}
 
     def outcome_p(probs, m):
         return probs["home"] if m.hg > m.ag else probs["draw"] if m.hg == m.ag else probs["away"]
@@ -158,6 +160,7 @@ def backtest(history: dict[str, list[Match]], last_season: dict[str, set[str]]) 
     for w in BLEND_GRID:
         losses[w] = np.mean([_logloss(outcome_p(blend(mp, mk, w), m)) for _, m, mp, mk in records])
     best_w = min(losses, key=losses.get)
+    log.info("Backtest: %d matches, blend weight %.1f, %.1fs", len(records), best_w, time.time() - started)
 
     def metrics(recs, getter):
         ll, brier, hits = [], [], []
@@ -208,6 +211,7 @@ def backtest(history: dict[str, list[Match]], last_season: dict[str, set[str]]) 
 
     dates = [m.kickoff for _, m, _, _ in records]
     return {
+        "computed_at": computed_at,
         "matches": len(records),
         "from": min(dates).isoformat(),
         "to": max(dates).isoformat(),
@@ -256,11 +260,19 @@ def _tip_json(m: Match, c: dict) -> dict:
     }
 
 
-def build_snapshot() -> dict:
+def build_predictions(
+    history: dict[str, list[Match]],
+    last_season: dict[str, set[str]],
+    fixtures: list[Match],
+    perf: dict | None,
+) -> dict:
+    """
+    Predictions for upcoming matches. Cheap: only fits the leagues that have
+    fixtures. perf is the latest backtest (None while it is still running);
+    it supplies the model/market blend weight.
+    """
     started = time.time()
-    history, last_season, fixtures = load_all()
-    perf = backtest(history, last_season)
-    w = perf.get("blend_weight", DEFAULT_BLEND)
+    w = perf["blend_weight"] if perf and perf.get("matches") else DEFAULT_BLEND
     now = datetime.now(timezone.utc)
 
     ratings: dict[str, Ratings | None] = {
@@ -305,7 +317,7 @@ def build_snapshot() -> dict:
         if count:
             leagues.append({"code": lg, "country": country, "name": name, "matches": count})
 
-    log.info("Snapshot built in %.1fs: %d matches", time.time() - started, len(matches))
+    log.info("Predictions built in %.1fs: %d matches", time.time() - started, len(matches))
     return {
         "status": "ok",
         "updated_at": now.isoformat(),
@@ -316,3 +328,10 @@ def build_snapshot() -> dict:
         "tips": tips,
         "performance": perf,
     }
+
+
+def build_snapshot() -> dict:
+    """Everything in one go (used by tests and local scripts)."""
+    history, last_season, fixtures = load_all()
+    perf = backtest(history, last_season)
+    return build_predictions(history, last_season, fixtures, perf)

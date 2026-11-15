@@ -17,12 +17,18 @@ from datetime import datetime
 
 import numpy as np
 from scipy.optimize import minimize, minimize_scalar
-from scipy.stats import poisson
+from scipy.special import gammaln
 
 from . import config
 from .data import Match
 
 MIN_MATCHES = 40
+
+_GOALS = np.arange(config.MAX_GOALS + 1)
+_LOG_FACT = gammaln(_GOALS + 1)
+_HG, _AG = np.meshgrid(_GOALS, _GOALS, indexing="ij")
+_TOTAL = _HG + _AG
+_OVER = _TOTAL >= 3
 
 
 @dataclass
@@ -61,12 +67,17 @@ def _tau(hg, ag, lam, mu, rho):
     return np.clip(t, 1e-10, None)
 
 
+def _pmf(rate: float) -> np.ndarray:
+    return np.exp(_GOALS * np.log(rate) - rate - _LOG_FACT)
+
+
 def score_probabilities(lam: float, mu: float, rho: float) -> dict:
-    n = config.MAX_GOALS + 1
-    goals = np.arange(n)
-    grid = np.outer(poisson.pmf(goals, lam), poisson.pmf(goals, mu))
-    hg, ag = np.meshgrid(goals, goals, indexing="ij")
-    grid = grid * _tau(hg, ag, np.full_like(grid, lam), np.full_like(grid, mu), rho)
+    grid = np.outer(_pmf(lam), _pmf(mu))
+    # Dixon-Coles correction only touches the four lowest scores.
+    grid[0, 0] *= max(1 - lam * mu * rho, 1e-10)
+    grid[0, 1] *= max(1 + lam * rho, 1e-10)
+    grid[1, 0] *= max(1 + mu * rho, 1e-10)
+    grid[1, 1] *= max(1 - rho, 1e-10)
     grid /= grid.sum()
 
     flat = np.argsort(grid, axis=None)[::-1][:3]
@@ -74,13 +85,13 @@ def score_probabilities(lam: float, mu: float, rho: float) -> dict:
         {"score": f"{i}-{j}", "p": round(float(grid[i, j]), 4)}
         for i, j in (np.unravel_index(k, grid.shape) for k in flat)
     ]
-    total = hg + ag
+    over = float(grid[_OVER].sum())
     return {
         "home": float(np.tril(grid, -1).sum()),
         "draw": float(np.trace(grid)),
         "away": float(np.triu(grid, 1).sum()),
-        "over25": float(grid[total >= 3].sum()),
-        "under25": float(grid[total <= 2].sum()),
+        "over25": over,
+        "under25": 1 - over,
         "btts": float(grid[1:, 1:].sum()),
         "xg_home": round(lam, 2),
         "xg_away": round(mu, 2),

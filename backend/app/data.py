@@ -51,8 +51,8 @@ class Match:
 ODDS_SOURCES = {"max": "Max", "avg": "Avg", "bfe": "BFE"}
 
 
-def _num(row: dict, key: str, allow_zero: bool = False) -> float | None:
-    raw = (row.get(key) or "").strip()
+def _to_float(raw: str, allow_zero: bool = False) -> float | None:
+    raw = raw.strip()
     if not raw:
         return None
     try:
@@ -77,20 +77,32 @@ def _kickoff(date_s: str, time_s: str) -> datetime | None:
 
 def parse_csv(text: str, league: str | None = None) -> list[Match]:
     """Parse one football-data CSV. If league is None, use the Div column."""
+    rows = csv.reader(io.StringIO(text))
+    header = next(rows, None)
+    if not header:
+        return []
+    col = {name.strip(): i for i, name in enumerate(header)}
+
+    def get(row, name):
+        i = col.get(name)
+        return row[i] if i is not None and i < len(row) else ""
+
+    odds_cols = [
+        (key, [f"{p}H", f"{p}D", f"{p}A"], [f"{p}>2.5", f"{p}<2.5"]) for key, p in ODDS_SOURCES.items()
+    ]
     matches = []
-    for row in csv.DictReader(io.StringIO(text)):
-        row = {(k or "").strip(): v for k, v in row.items()}
-        div = (row.get("Div") or "").strip()
-        home, away = (row.get("HomeTeam") or "").strip(), (row.get("AwayTeam") or "").strip()
-        kickoff = _kickoff(row.get("Date", ""), row.get("Time", ""))
-        if not home or not away or kickoff is None:
-            continue
-        lg = league or div
+    for row in rows:
+        lg = league or get(row, "Div").strip()
         if lg not in config.LEAGUES:
             continue
-
-        hg, ag = _num(row, "FTHG", allow_zero=True), _num(row, "FTAG", allow_zero=True)
-
+        home, away = get(row, "HomeTeam").strip(), get(row, "AwayTeam").strip()
+        if not home or not away:
+            continue
+        kickoff = _kickoff(get(row, "Date"), get(row, "Time"))
+        if kickoff is None:
+            continue
+        hg = _to_float(get(row, "FTHG"), allow_zero=True)
+        ag = _to_float(get(row, "FTAG"), allow_zero=True)
         m = Match(
             league=lg,
             kickoff=kickoff,
@@ -98,14 +110,14 @@ def parse_csv(text: str, league: str | None = None) -> list[Match]:
             away=away,
             hg=int(hg) if hg is not None else None,
             ag=int(ag) if ag is not None else None,
-            hxg=_num(row, "HxG", allow_zero=True),
-            axg=_num(row, "AxG", allow_zero=True),
+            hxg=_to_float(get(row, "HxG"), allow_zero=True),
+            axg=_to_float(get(row, "AxG"), allow_zero=True),
         )
-        for key, prefix in ODDS_SOURCES.items():
-            h, d, a = _num(row, f"{prefix}H"), _num(row, f"{prefix}D"), _num(row, f"{prefix}A")
+        for key, three, two in odds_cols:
+            h, d, a = (_to_float(get(row, c)) for c in three)
             if h and d and a:
                 m.odds[key] = (h, d, a)
-            o, u = _num(row, f"{prefix}>2.5"), _num(row, f"{prefix}<2.5")
+            o, u = (_to_float(get(row, c)) for c in two)
             if o and u:
                 m.ou[key] = (o, u)
         matches.append(m)

@@ -12,8 +12,18 @@ const RULES = [
   ["goals", "Golovi"],
 ];
 
-export default function Performance({ perf }) {
-  if (!perf?.matches) {
+export default function Performance({ perf, onReload }) {
+  if (!perf) {
+    return (
+      <div className="empty">
+        <p>Proverkata na tochnosta se presmetuva. Ova trae edna do dve minuti po budenjeto na serverot.</p>
+        <button type="button" className="button" onClick={onReload}>
+          Vchitaj povtorno
+        </button>
+      </div>
+    );
+  }
+  if (!perf.matches) {
     return <p className="empty">Seushte nema dovolno odigrani natprevari za merenje.</p>;
   }
   const days = Math.round((new Date(perf.to) - new Date(perf.from)) / 86400000);

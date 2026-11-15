@@ -100,3 +100,10 @@ def test_unknown_teams_fall_back_to_market(offline, files, monkeypatch):
     m = next(m for m in snap["matches"] if m["home"] == "Brand New FC")
     assert m["model"] is None and m["market"] is not None
     assert abs(m["probs"]["home"] + m["probs"]["draw"] + m["probs"]["away"] - 1) < 1e-3
+
+
+def test_predictions_work_before_backtest(offline):
+    history, last_season, fixtures = data.load_all()
+    snap = engine.build_predictions(history, last_season, fixtures, perf=None)
+    assert snap["matches"] and snap["performance"] is None
+    assert snap["blend_weight"] == engine.DEFAULT_BLEND

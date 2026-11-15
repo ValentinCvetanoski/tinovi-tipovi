@@ -113,7 +113,7 @@ export default function App() {
             {tab === "all" && (
               <MatchList matches={data.matches} leagues={data.leagues} ticket={ticket} onToggle={toggle} />
             )}
-            {tab === "perf" && <Performance perf={data.performance} />}
+            {tab === "perf" && <Performance perf={data.performance} onReload={retry} />}
           </main>
 
           <Ticket ticket={ticket} matchesById={matchesById} onRemove={remove} onClear={() => setTicket({})} />

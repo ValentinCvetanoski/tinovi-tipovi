@@ -18,7 +18,7 @@ Football tips from a statistical model, checked against the betting market. No A
 
    The *Kolku pogoduva* tab shows how accurate the probabilities and each tip type were on those replayed matches.
 
-Data refreshes every 6 hours in the background, so pages load instantly from memory.
+Data refreshes every 6 hours in the background, so pages load instantly from memory. After a restart, tips go live as soon as the data is downloaded; the backtest runs afterwards (at most once a day) and then fine-tunes the blend.
 
 ## Run locally
 
@@ -55,7 +55,7 @@ Tests: `cd backend && pip install pytest && python -m pytest`. They use generate
 - On Render, set `ALLOWED_ORIGINS` to your Vercel URL, e.g. `https://tinovi-tipovi.vercel.app`.
 
 ### Free-tier note
-A free Render service sleeps after 15 minutes without visitors. The first visit after that waits about a minute while it wakes up and rebuilds the data; the site shows a message and retries on its own.
+A free Render service sleeps after 15 minutes without visitors. The first visit after that waits while it wakes up and downloads the data (usually under a minute); the site shows a message and retries on its own. The *Kolku pogoduva* tab fills in a minute or two later.
 
 ## Settings
 
@@ -71,6 +71,7 @@ All optional, set as environment variables on Render:
 | `VALUE_MIN_EV` | `0.03` | Minimum value for *Vrednost* |
 | `GOALS_MIN_PROB` | `0.58` | Minimum chance for *Golovi* |
 | `TIPS_LIMIT` | `12` | Tips shown per tab |
+| `BACKTEST_EVERY_HOURS` | `24` | How often the backtest is rerun |
 
 ## Responsible gambling
 

@@ -41,7 +41,7 @@ export function useSnapshot() {
 
   const retry = useCallback(() => {
     attempts.current = 0;
-    setState({ data: null, error: null, waking: true });
+    setState((s) => ({ ...s, error: null, waking: !s.data }));
     load();
   }, [load]);
 

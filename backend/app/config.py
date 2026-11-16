@@ -31,8 +31,9 @@ _enabled = os.getenv("LEAGUES")
 if _enabled:
     LEAGUES = {k: v for k, v in LEAGUES.items() if k in _enabled.split(",")}
 
-# How often to re-download data and refit (football-data updates ~twice a week).
-REFRESH_HOURS = float(os.getenv("REFRESH_HOURS", "6"))
+# How often to check for new data. football-data adds results ~twice a week,
+# so checking every 3 hours means new results show up within a few hours.
+REFRESH_HOURS = float(os.getenv("REFRESH_HOURS", "3"))
 HTTP_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", "20"))
 
 # --- model ---

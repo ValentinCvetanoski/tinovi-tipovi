@@ -219,3 +219,21 @@ def test_history_endpoint(offline):
 
     assert client.get("/api/history", params={"category": "bogus"}).status_code == 422
     main._state.update(history=None, perf=None)
+
+
+def test_backtest_reruns_when_new_results_arrive(offline):
+    from app import main
+
+    history, last_season, _ = data.load_all()
+    perf, _ = engine.backtest(history, last_season)
+    assert perf["data_through"] == engine.latest_result(history)
+    assert not main.needs_backtest(perf, history)  # fresh and up to date
+
+    # the data source adds a new result
+    lg = next(iter(history))
+    newest = history[lg][-1]
+    newer = data.Match(lg, newest.kickoff + timedelta(days=1), newest.away, newest.home, hg=1, ag=0)
+    history[lg] = history[lg] + [newer]
+    assert main.needs_backtest(perf, history)
+
+    assert main.needs_backtest(None, history)  # never ran

@@ -156,8 +156,12 @@ def backtest(history: dict[str, list[Match]], last_season: dict[str, set[str]]) 
             cut = nxt
 
     computed_at = datetime.now(timezone.utc).isoformat()
+    data_through = latest_result(history)
     if not records:
-        return {"matches": 0, "blend_weight": DEFAULT_BLEND, "computed_at": computed_at}, []
+        return {
+            "matches": 0, "blend_weight": DEFAULT_BLEND,
+            "computed_at": computed_at, "data_through": data_through,
+        }, []
 
     def outcome_p(probs, m):
         return probs["home"] if m.hg > m.ag else probs["draw"] if m.hg == m.ag else probs["away"]
@@ -219,6 +223,7 @@ def backtest(history: dict[str, list[Match]], last_season: dict[str, set[str]]) 
     dates = [m.kickoff for _, m, _, _ in records]
     return {
         "computed_at": computed_at,
+        "data_through": data_through,
         "matches": len(records),
         "from": min(dates).isoformat(),
         "to": max(dates).isoformat(),
@@ -228,6 +233,12 @@ def backtest(history: dict[str, list[Match]], last_season: dict[str, set[str]]) 
         "leagues": per_league,
         "tips": tip_stats,
     }, past_tips(since_start, best_w)
+
+
+def latest_result(history: dict[str, list[Match]]) -> str | None:
+    """Kick-off time of the most recent finished match in the data (ISO)."""
+    latest = max((m.kickoff for ms in history.values() for m in ms if m.played), default=None)
+    return latest.isoformat() if latest else None
 
 
 def past_tips(records: list, w: float) -> list[dict]:

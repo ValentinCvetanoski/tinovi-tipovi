@@ -105,12 +105,20 @@ export default function History() {
     ? `${sinceDate.getUTCDate()}.${sinceDate.getUTCMonth() + 1}.${sinceDate.getUTCFullYear()}`
     : "pochetokot";
   const filtered = category !== "all" || result !== "all" || league !== "";
+  const dataThrough = page.data_through ? kickoff(page.data_through).day : null;
 
   return (
     <section className="history" aria-label="Minati tipovi">
       <p className="intro">
         Site tipovi od {since} navamu, so konechniot rezultat. Sekoj tip se presmetuva samo so podatocite od pred
         pochetokot na natprevarot.
+        {dataThrough && (
+          <>
+            {" "}
+            Rezultatite stignuvaat od football-data.co.uk dva pati nedelno. Posleden rezultat vo podatocite:{" "}
+            <strong>{dataThrough}</strong>.
+          </>
+        )}
       </p>
 
       <div className="history__filters">
@@ -147,7 +155,7 @@ export default function History() {
         <p className="empty">
           {filtered
             ? "Nema tipovi za ovie filtri."
-            : `Seushte nema zavrsheni natprevari od ${since} navamu. Tipovite kje se pojavat tuka koga kje zavrshat natprevarite i kje stignat rezultatite, obichno za eden do dva dena.`}
+            : `Seushte nema rezultati za tipovite od ${since} navamu. Tie kje se pojavat tuka koga izvorot kje gi dodade rezultatite, obichno eden do tri dena po natprevarot.`}
         </p>
       ) : (
         <>

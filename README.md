@@ -20,7 +20,7 @@ Football tips from a statistical model, checked against the betting market. No A
 
    Past tips are rebuilt from the data instead of being stored, because Render's free plan has no permanent disk. They are the tips the app would have given at the time: the model is refit every week on matches played before, and uses the odds published before kick-off.
 
-Data refreshes every 6 hours in the background, so pages load instantly from memory. After a restart, tips go live as soon as the data is downloaded; the backtest runs afterwards (at most once a day) and then fine-tunes the blend.
+Data refreshes every 3 hours in the background, so pages load instantly from memory. After a restart, tips go live as soon as the data is downloaded; the backtest runs afterwards (at most once a day) and then fine-tunes the blend.
 
 ## Run locally
 
@@ -68,7 +68,7 @@ All optional, set as environment variables on Render:
 | Variable | Default | Meaning |
 |---|---|---|
 | `LEAGUES` | all 18 | Comma-separated codes, e.g. `E0,SP1,I1,D1,F1` |
-| `REFRESH_HOURS` | `6` | How often data is re-downloaded |
+| `REFRESH_HOURS` | `3` | How often to check for new data |
 | `XG_SHARE` | `0.6` | Share of xG vs goals in the model's training target |
 | `DECAY` | `0.003` | How fast old matches lose weight (per day) |
 | `SAFE_MIN_PROB` | `0.62` | Minimum chance for *Sigurni* |

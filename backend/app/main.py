@@ -22,7 +22,7 @@ from fastapi.responses import JSONResponse
 
 from . import config
 from .data import CACHE_DIR, load_all
-from .engine import backtest, build_predictions, summarize
+from .engine import backtest, build_predictions, latest_result, summarize
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("tipovi")
@@ -76,12 +76,21 @@ def _perf_age_hours(perf: dict | None) -> float:
     return (datetime.now(timezone.utc) - then).total_seconds() / 3600
 
 
+def needs_backtest(perf: dict | None, history: dict) -> bool:
+    """Re-run when the last run is old, or as soon as new results are in the data."""
+    if _perf_age_hours(perf) >= BACKTEST_EVERY_HOURS:
+        return True
+    newest = latest_result(history)
+    return newest is not None and newest != perf.get("data_through")
+
+
 def _refresh() -> bool:
     """
     Rebuild in two steps so the site is usable quickly after a cold start:
     1. predictions (seconds) are published straight away,
-    2. the backtest (slower) runs only when the last one is over a day old,
-       then the predictions are rebuilt with the newly tuned blend weight.
+    2. the backtest (slower) runs when new results have arrived or the last
+       run is over a day old, then the predictions are rebuilt with the newly
+       tuned blend weight.
     Returns True on success.
     """
     with _lock:
@@ -97,7 +106,7 @@ def _refresh() -> bool:
             history=past,
             error=None,
         )
-        if _perf_age_hours(perf) >= BACKTEST_EVERY_HOURS:
+        if needs_backtest(perf, history):
             perf, past = backtest(history, last_season)
             _save_perf(perf, past)
             _state.update(
@@ -186,6 +195,7 @@ def history(
         {
             "status": "ok",
             "since": config.HISTORY_START.isoformat(),
+            "data_through": perf.get("data_through"),
             "computed_at": perf.get("computed_at"),
             "summary": summary,
             "total": len(items),
